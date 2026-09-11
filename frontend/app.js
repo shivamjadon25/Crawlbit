@@ -12,8 +12,17 @@ let clockTimer = null;
 let t0 = 0;
 
 // Host URL
-const DEFAULT_HOST = window.location.port === '3000' ? '' : (window.location.protocol === 'http:' || window.location.protocol === 'https:' ? (window.location.origin.includes('3000') ? '' : 'http://localhost:3000') : 'http://localhost:3000');
-let API_HOST = localStorage.getItem('crawlbit_studio_api') || DEFAULT_HOST;
+const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || !window.location.hostname);
+const DEFAULT_HOST = window.location.port === '3000'
+  ? ''
+  : (isLocalhost ? 'http://localhost:3000' : 'https://crawlbit-api.onrender.com');
+
+let savedHost = localStorage.getItem('crawlbit_studio_api');
+if (!isLocalhost && savedHost === 'http://localhost:3000') {
+  savedHost = 'https://crawlbit-api.onrender.com';
+  localStorage.setItem('crawlbit_studio_api', savedHost);
+}
+let API_HOST = savedHost || DEFAULT_HOST;
 
 // Boot
 document.addEventListener('DOMContentLoaded', () => {
