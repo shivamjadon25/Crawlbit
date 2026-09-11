@@ -1,0 +1,15 @@
+{
+  "name": "crawlbit-frontend",
+  "version": "2.0.0",
+  "description": "Crawlbit Frontend - Minimalist and functional Web Scraper & Crawler UI",
+  "scripts": {
+    "start": "npx serve -l 8080 ."
+  },
+  "keywords": [
+    "crawlbit",
+    "scraper-ui",
+    "crawler-ui"
+  ],
+  "author": "Crawlbit Team",
+  "license": "ISC"
+}

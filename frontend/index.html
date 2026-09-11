@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crawlbit Studio — Web Scraping & Crawling Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div class="studio-app">
+    
+    <!-- TOP NAVIGATION & STUDIO BAR -->
+    <header class="studio-header">
+      <div class="brand-cluster">
+        <span class="brand-mark"></span>
+        <span class="brand-title">crawlbit</span>
+        <span class="brand-sub">studio</span>
+      </div>
+
+      <!-- OMNI COMMAND BAR -->
+      <div class="omni-bar">
+        <!-- MODE SELECTOR PILL -->
+        <div class="mode-dropdown-trigger" onclick="toggleModeMenu(event)">
+          <span id="current-mode-label">Scrape</span>
+          <svg width="12" height="8" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div id="mode-menu" class="mode-menu hidden">
+          <div class="mode-opt active" id="opt-scrape" onclick="selectMode('scrape')">
+            <span class="opt-name">Scrape</span>
+            <span class="opt-desc">Single or multi-URL batch page extractor</span>
+          </div>
+          <div class="mode-opt" id="opt-crawl" onclick="selectMode('crawl')">
+            <span class="opt-name">Crawl</span>
+            <span class="opt-desc">BFS domain graph link discovery crawler</span>
+          </div>
+        </div>
+
+        <!-- URL / SEED INPUT -->
+        <div class="omni-input-wrap">
+          <input type="text" id="target-input" class="omni-input" placeholder="https://example.com (or paste multiple URLs separated by commas)" spellcheck="false" autocomplete="off" />
+        </div>
+
+        <!-- PARAMS BUTTON -->
+        <button class="params-trigger-btn" id="params-btn" onclick="toggleParamsDrawer()" title="Configure extraction & stealth parameters">
+          <span>Options</span>
+          <span class="param-counter" id="active-param-count">3</span>
+        </button>
+
+        <!-- RUN / DISPATCH BUTTON -->
+        <button class="run-dispatch-btn" id="run-btn" onclick="triggerExecution()">
+          <span id="run-spinner" class="run-spinner hidden"></span>
+          <span id="run-text">Run</span>
+          <kbd class="kbd-hint">↵</kbd>
+        </button>
+      </div>
+
+      <!-- RIGHT UTILITIES -->
+      <div class="header-utils">
+        <button class="pill-btn" onclick="openConfigModal()" title="API Endpoint settings">
+          <span class="dot live" id="header-pulse"></span>
+          <span id="header-host">localhost:3000</span>
+        </button>
+        <button class="icon-square-btn" onclick="toggleTheme()" title="Toggle appearance">
+          <span id="theme-glyph">◐</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- MAIN WORKSPACE -->
+    <div class="studio-workspace">
+      
+      <!-- SLIDE-OUT OPTIONS / CONFIG DRAWER -->
+      <aside class="options-drawer hidden" id="options-drawer">
+        <div class="drawer-header">
+          <span>Execution Parameters</span>
+          <button class="drawer-close" onclick="toggleParamsDrawer()">&times;</button>
+        </div>
+
+        <div class="drawer-body">
+          <!-- SCRAPER OPTIONS -->
+          <div id="drawer-scrape-opts" class="drawer-section">
+            <div class="opts-group">
+              <label class="group-label">Output Formats</label>
+              <div class="segmented-chips">
+                <label class="chip-item">
+                  <input type="checkbox" name="fmt-chip" value="markdown" checked onchange="updateParamCount()">
+                  <span>Markdown</span>
+                </label>
+                <label class="chip-item">
+                  <input type="checkbox" name="fmt-chip" value="html" onchange="updateParamCount()">
+                  <span>HTML</span>
+                </label>
+                <label class="chip-item">
+                  <input type="checkbox" name="fmt-chip" value="text" onchange="updateParamCount()">
+                  <span>Text</span>
+                </label>
+                <label class="chip-item">
+                  <input type="checkbox" name="fmt-chip" value="links" onchange="updateParamCount()">
+                  <span>Links</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="opts-group">
+              <label class="group-label">Content Sanitization</label>
+              <div class="switch-stack">
+                <label class="drawer-switch-row">
+                  <span>Main content only (strip nav & footers)</span>
+                  <input type="checkbox" id="opt-main-content" checked onchange="updateParamCount()">
+                  <span class="slider"></span>
+                </label>
+                <label class="drawer-switch-row">
+                  <span>Block ads & tracking scripts</span>
+                  <input type="checkbox" id="opt-block-ads" checked onchange="updateParamCount()">
+                  <span class="slider"></span>
+                </label>
+                <label class="drawer-switch-row">
+                  <span>Remove base64 inline images</span>
+                  <input type="checkbox" id="opt-strip-b64" checked onchange="updateParamCount()">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="opts-group">
+              <label class="group-label">Stealth & Proxy</label>
+              <div class="switch-stack">
+                <label class="drawer-switch-row">
+                  <span>Rotate stealth proxy pool (with auto-fallback)</span>
+                  <input type="checkbox" id="opt-use-proxy" onchange="updateParamCount()">
+                  <span class="slider"></span>
+                </label>
+                <label class="drawer-switch-row">
+                  <span>Headless Browser (Full JS & Cloudflare Rendering)</span>
+                  <input type="checkbox" id="opt-use-browser" onchange="updateParamCount()">
+                  <span class="slider"></span>
+                </label>
+                <label class="drawer-switch-row">
+                  <span>Mobile device emulation (iPhone Safari)</span>
+                  <input type="checkbox" id="opt-use-mobile" onchange="updateParamCount()">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div style="margin-top: 0.5rem;">
+                <input type="text" id="opt-custom-proxy" class="drawer-input" placeholder="Custom Proxy (e.g. http://user:pass@host:port)">
+              </div>
+            </div>
+
+            <div class="opts-group">
+              <label class="group-label">CSS Selectors</label>
+              <div class="field-stack">
+                <input type="text" id="opt-inc-sel" class="drawer-input" placeholder="Include (e.g. article, .content)">
+                <input type="text" id="opt-exc-sel" class="drawer-input" placeholder="Exclude (e.g. .sidebar, #comments)">
+              </div>
+            </div>
+
+            <div class="opts-group">
+              <label class="group-label">Custom Headers (JSON)</label>
+              <textarea id="opt-headers" class="drawer-textarea" rows="2" placeholder='{"Authorization": "Bearer token"}'></textarea>
+            </div>
+
+            <div class="opts-group">
+              <label class="group-label">Basic Auth</label>
+              <div class="split-inputs">
+                <input type="text" id="opt-auth-user" class="drawer-input" placeholder="Username">
+                <input type="password" id="opt-auth-pass" class="drawer-input" placeholder="Password">
+              </div>
+            </div>
+          </div>
+
+          <!-- CRAWLER OPTIONS -->
+          <div id="drawer-crawl-opts" class="drawer-section hidden">
+            <div class="opts-group">
+              <label class="group-label">Traversal Limits</label>
+              <div class="split-inputs">
+                <div>
+                  <span class="field-sublabel">Max URLs</span>
+                  <input type="number" id="opt-crawl-limit" class="drawer-input" value="30" min="1" max="500">
+                </div>
+                <div>
+                  <span class="field-sublabel">Max Depth</span>
+                  <input type="number" id="opt-crawl-depth" class="drawer-input" value="2" min="1" max="10">
+                </div>
+              </div>
+            </div>
+
+            <div class="opts-group">
+              <label class="group-label">Scope & Networking</label>
+              <div class="switch-stack">
+                <label class="drawer-switch-row">
+                  <span>Allow subdomains</span>
+                  <input type="checkbox" id="opt-crawl-subdomains" checked>
+                  <span class="slider"></span>
+                </label>
+                <label class="drawer-switch-row">
+                  <span>Follow external domains</span>
+                  <input type="checkbox" id="opt-crawl-external">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="opts-group">
+              <label class="group-label">Throttling</label>
+              <div class="split-inputs">
+                <div>
+                  <span class="field-sublabel">Concurrency</span>
+                  <input type="number" id="opt-crawl-conc" class="drawer-input" value="5" min="1" max="20">
+                </div>
+                <div>
+                  <span class="field-sublabel">Delay (ms)</span>
+                  <input type="number" id="opt-crawl-delay" class="drawer-input" value="0" min="0" step="50">
+                </div>
+              </div>
+            </div>
+
+            <div class="opts-group">
+              <label class="group-label">Path Patterns (Regex)</label>
+              <div class="field-stack">
+                <input type="text" id="opt-crawl-pin" class="drawer-input" placeholder="Include path pattern (e.g. /docs)">
+                <input type="text" id="opt-crawl-pex" class="drawer-input" placeholder="Exclude path pattern (e.g. /admin)">
+              </div>
+            </div>
+
+            <div class="opts-group">
+              <label class="group-label">Basic Auth</label>
+              <div class="split-inputs">
+                <input type="text" id="opt-crawl-user" class="drawer-input" placeholder="Username">
+                <input type="password" id="opt-crawl-pass" class="drawer-input" placeholder="Password">
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- RESULTS STAGE -->
+      <main class="studio-stage">
+        
+        <!-- STAGE SUBHEADER / INSPECTOR TABS -->
+        <div class="stage-toolbar">
+          <div class="target-tabs-bar" id="target-tabs-bar">
+            <!-- Dynamically populated target pills if batch scraping -->
+          </div>
+
+          <div class="inspector-tab-strip">
+            <button class="itab active" id="itab-rendered" onclick="setInspectorTab('rendered')">Rendered</button>
+            <button class="itab" id="itab-markdown" onclick="setInspectorTab('markdown')">Markdown</button>
+            <button class="itab" id="itab-html" onclick="setInspectorTab('html')">HTML</button>
+            <button class="itab" id="itab-text" onclick="setInspectorTab('text')">Text</button>
+            <button class="itab" id="itab-links" onclick="setInspectorTab('links')">Links <span class="badge hidden" id="itab-links-count">0</span></button>
+            <button class="itab" id="itab-json" onclick="setInspectorTab('json')">Payload JSON</button>
+          </div>
+
+          <div class="stage-actions">
+            <button class="stage-btn" onclick="copyActiveContent()" title="Copy active document content">
+              <span id="copy-btn-label">Copy</span>
+            </button>
+            <div class="export-pop-wrapper">
+              <button class="stage-btn" onclick="toggleExportMenu(event)">
+                <span>Export ▾</span>
+              </button>
+              <div class="export-pop-menu hidden" id="export-pop-menu">
+                <button onclick="exportResultFile('markdown')">Download .md (Markdown)</button>
+                <button onclick="exportResultFile('json')">Download .json (Raw Payload)</button>
+                <button onclick="exportResultFile('html')">Download .html (Clean DOM)</button>
+                <button onclick="exportResultFile('csv')">Download .csv (Links Table)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGE CONTENT CANVAS -->
+        <div class="stage-canvas" id="stage-canvas">
+          <!-- IDLE WELCOME -->
+          <div class="stage-idle" id="stage-idle">
+            <div class="idle-graphic">
+              <div class="mesh-ring"></div>
+            </div>
+            <h2 class="idle-title">Ready for execution</h2>
+            <p class="idle-desc">Type a URL in the command bar above and press <kbd>Enter</kbd> to initiate stealth extraction.</p>
+            <div class="quick-starts">
+              <button class="start-pill" onclick="quickLoad('https://example.com')">https://example.com</button>
+              <button class="start-pill" onclick="quickLoad('https://news.ycombinator.com')">https://news.ycombinator.com</button>
+              <button class="start-pill" onclick="quickLoad('https://www.cuit.columbia.edu')">https://www.cuit.columbia.edu</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- BOTTOM TELEMETRY STATUS BAR -->
+    <footer class="studio-statusbar">
+      <div class="status-left">
+        <span class="status-segment"><span class="status-indicator-dot" id="footer-dot"></span> <span id="footer-conn-text">API Online</span></span>
+        <span class="status-separator">/</span>
+        <span class="status-segment" id="footer-mode">Scraper Mode</span>
+        <span class="status-separator">/</span>
+        <span class="status-segment" id="footer-status-code">IDLE</span>
+      </div>
+
+      <div class="status-right">
+        <span class="status-segment" id="footer-time">0 ms</span>
+        <span class="status-separator">/</span>
+        <span class="status-segment" id="footer-size">0 KB</span>
+        <span class="status-separator">/</span>
+        <span class="status-segment shortcut-trigger" onclick="toggleParamsDrawer()">Options: <kbd>Tab</kbd></span>
+      </div>
+    </footer>
+
+    <!-- ENDPOINT CONFIG MODAL -->
+    <div class="modal-overlay hidden" id="endpoint-modal" onclick="closeModalOnOverlay(event)">
+      <div class="modal-window">
+        <div class="modal-head">
+          <span>API Connection Endpoint</span>
+          <button class="modal-x" onclick="closeEndpointModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <label class="modal-label">Backend Host URL</label>
+          <input type="text" id="endpoint-url-input" class="modal-input" placeholder="http://localhost:3000">
+          <div class="probe-box" id="probe-box">
+            <span id="probe-text">Enter backend URL and click Ping to verify.</span>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="modal-btn-subtle" onclick="pingCustomEndpoint()">Ping</button>
+          <button class="modal-btn-action" onclick="saveCustomEndpoint()">Save & Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION STREAM -->
+    <div class="toast-stream" id="toast-stream"></div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
