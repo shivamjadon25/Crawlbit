@@ -72,10 +72,64 @@ async function renderPageWithBrowser(url, options = {}) {
     browser = await getBrowser(customProxy);
     page = await browser.newPage();
 
-    // Stealth overrides
+    // Advanced Stealth Injections
     await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
-      window.chrome = { runtime: {} };
+      // 1. Pass Webdriver Test
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+      // 2. Mock Chrome Runtime & App
+      window.chrome = {
+        app: { isInstalled: false, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }, RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' } },
+        runtime: {
+          OnInstalledReason: { CHROME_UPDATE: 'chrome_update', INSTALL: 'install', SHARED_MODULE_UPDATE: 'shared_module_update', UPDATE: 'update' },
+          OnRestartRequiredReason: { APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' },
+          PlatformArch: { ARM: 'arm', ARM64: 'arm64', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' },
+          PlatformNaclArch: { ARM: 'arm', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' },
+          PlatformOs: { ANDROID: 'android', CROS: 'cros', LINUX: 'linux', MAC: 'mac', OPENBSD: 'openbsd', WIN: 'win' },
+          RequestUpdateCheckStatus: { NO_UPDATE: 'no_update', THROTTLED: 'throttled', UPDATE_AVAILABLE: 'update_available' }
+        },
+        csi: () => {},
+        loadTimes: () => {}
+      };
+
+      // 3. Mock Plugins
+      const makePlugin = (name, filename, description) => ({
+        description,
+        filename,
+        name,
+        length: 1,
+        0: { type: 'application/pdf', suffixes: 'pdf', description: '' }
+      });
+      const pluginData = [
+        makePlugin('PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format'),
+        makePlugin('Chrome PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format'),
+        makePlugin('Chromium PDF Viewer', 'internal-pdf-viewer', 'Portable Document Format')
+      ];
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => Object.assign(pluginData, { item: (i) => pluginData[i], namedItem: (n) => pluginData.find(p => p.name === n), length: 3 })
+      });
+
+      // 4. Mock Languages & Hardware
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+      Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+
+      // 5. Spoof WebGL Vendor/Renderer
+      const getParameter = WebGLRenderingContext.prototype.getParameter;
+      WebGLRenderingContext.prototype.getParameter = function(param) {
+        if (param === 37445) return 'Google Inc. (NVIDIA)';
+        if (param === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+        return getParameter.apply(this, arguments);
+      };
+
+      // 6. Fix Permissions Query
+      const origQuery = window.navigator.permissions && window.navigator.permissions.query;
+      if (origQuery) {
+        window.navigator.permissions.query = (parameters) =>
+          parameters.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : origQuery(parameters);
+      }
     });
 
     const ua = mobile
@@ -105,23 +159,57 @@ async function renderPageWithBrowser(url, options = {}) {
       } catch (_) {}
     }
 
-    // Additional brief pause for Cloudflare JS challenge execution if needed
-    const pageTitle = await page.title();
-    if (pageTitle.includes('Just a moment') || pageTitle.includes('Attention Required')) {
-      await new Promise(r => setTimeout(r, 4000));
+    // Active Cloudflare Challenge / Turnstile Resolver Loop
+    let attempts = 0;
+    while (attempts < 6) {
+      const currentTitle = (await page.title()) || '';
+      const isCf = currentTitle.includes('Just a moment') ||
+                   currentTitle.includes('Attention Required') ||
+                   currentTitle.includes('Cloudflare');
+
+      if (!isCf) break;
+
+      // Attempt Turnstile interaction if iframe exists
+      try {
+        const frames = page.frames();
+        for (const frame of frames) {
+          if (frame.url().includes('challenges.cloudflare.com') || frame.url().includes('turnstile')) {
+            const checkbox = await frame.$('input[type="checkbox"], .cf-turnstile-wrapper, #challenge-stage');
+            if (checkbox) {
+              const box = await checkbox.boundingBox();
+              if (box) {
+                await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 5 });
+                await page.mouse.down();
+                await new Promise(r => setTimeout(r, 120));
+                await page.mouse.up();
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
+      await new Promise(r => setTimeout(r, 2000));
+      attempts++;
     }
 
     const html = await page.content();
     const finalUrl = page.url() || url;
+    const currentTitle = (await page.title()) || '';
     const status = response ? response.status() : 200;
     const buffer = Buffer.from(html, 'utf8');
 
+    const isWafStillActive = currentTitle.includes('Just a moment') ||
+      html.includes('id="challenge-error-text"') ||
+      html.includes('Enable JavaScript and cookies to continue');
+
     return {
       buffer,
-      status: (status >= 200 && status < 400) ? 200 : status,
+      status: isWafStillActive ? 403 : ((status >= 200 && status < 400) ? 200 : status),
       contentType: 'text/html; charset=utf-8',
       url: finalUrl,
       renderedWithBrowser: true,
+      isWafChallenge: isWafStillActive,
+      wafType: isWafStillActive ? 'Cloudflare Turnstile / Managed Challenge' : null,
     };
   } catch (err) {
     throw err;
